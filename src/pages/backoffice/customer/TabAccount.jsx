@@ -1,21 +1,40 @@
 import { useState } from "react"
 import axios from "../../../axiosConfig"
 import { boCustomersURL } from "../../../routes/Url"
+import { useConfirm } from "../../../components/ConfirmDialog"
+import toast from "../../../utils/toast"
 
 export default function TabAccount({ data, customerId, role, onChange, notes }) {
   const [tagsDraft, setTagsDraft] = useState((data.tags || []).join(", "))
   const [noteDraft, setNoteDraft] = useState("")
   const canEdit = ["admin", "support"].includes(role)
   const isAdmin = role === "admin"
+  const { confirm, prompt: ask } = useConfirm()
 
   const exportData = () => window.open(`${boCustomersURL}/${customerId}/gdpr-export`, "_blank")
   const deleteCustomer = async () => {
-    const c1 = prompt("This soft-deletes the customer (PII redacted, hardware unlinked). Type DELETE to confirm:")
-    if (c1 !== "DELETE") return
-    if (!confirm("Final confirmation: delete this customer's data?")) return
-    await axios.delete(`${boCustomersURL}/${customerId}/gdpr-delete`, { data: { confirm: "DELETE" } })
-    alert("Customer soft-deleted.")
-    onChange()
+    // Two-step destructive confirmation: first the user has to TYPE the word
+    // DELETE (uppercase, exact) — that filters out everyone except the agent
+    // who really meant to do this. Then a final yes/no.
+    const typed = await ask("This soft-deletes the customer (PII redacted, hardware unlinked). Type DELETE to confirm:", {
+      title: "GDPR delete customer",
+      placeholder: "DELETE",
+      confirmLabel: "Continue",
+      validate: (v) => v === "DELETE",
+      danger: true,
+    })
+    if (typed !== "DELETE") return
+    if (!(await confirm("This cannot be undone after the 30-day grace period. Hardware stays in inventory but is unlinked.", {
+      title: "Final confirmation",
+      confirmLabel: "Delete customer data",
+    }))) return
+    try {
+      await axios.delete(`${boCustomersURL}/${customerId}/gdpr-delete`, { data: { confirm: "DELETE" } })
+      toast.success("Customer soft-deleted. Hard delete in 30 days.")
+      onChange()
+    } catch (e) {
+      toast.error(e.response?.data?.message || "Failed to delete")
+    }
   }
 
   const saveTags = async () => {

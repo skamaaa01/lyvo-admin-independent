@@ -23,6 +23,15 @@ export default function BackOfficeLogin() {
   const [error, setError] = useState("")
   const [busy, setBusy] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
+  // Sticky preference — reflects what the user picked last time on this browser.
+  const [rememberDevice, setRememberDevice] = useState(() => {
+    try { return localStorage.getItem("bo_remember_device") === "1" } catch { return false }
+  })
+
+  function rememberPref(value) {
+    setRememberDevice(value)
+    try { localStorage.setItem("bo_remember_device", value ? "1" : "0") } catch {}
+  }
 
   async function submitCredentials(e) {
     e.preventDefault()
@@ -37,6 +46,10 @@ export default function BackOfficeLogin() {
         setSecret(setupRes.data.secret)
         setOtpauthUri(setupRes.data.otpauthUri)
         setStage("mfa_setup")
+      } else if (data.stage === "ok") {
+        // Trusted-device shortcut — backend skipped 2FA because we have a
+        // valid bo_device cookie. Go straight to the dashboard.
+        navigate(boPath("/dashboard"), { replace: true })
       } else {
         setStage("mfa_verify")
       }
@@ -52,7 +65,7 @@ export default function BackOfficeLogin() {
     setError("")
     setBusy(true)
     try {
-      await axios.post(boVerifyEnrollURL, { preToken, code }, { _silentToast: true })
+      await axios.post(boVerifyEnrollURL, { preToken, code, rememberDevice }, { _silentToast: true })
       navigate(boPath("/dashboard"), { replace: true })
     } catch (err) {
       setError(err.response?.data?.message || "Invalid code")
@@ -66,7 +79,7 @@ export default function BackOfficeLogin() {
     setError("")
     setBusy(true)
     try {
-      await axios.post(boVerify2FAURL, { preToken, code }, { _silentToast: true })
+      await axios.post(boVerify2FAURL, { preToken, code, rememberDevice }, { _silentToast: true })
       navigate(boPath("/dashboard"), { replace: true })
     } catch (err) {
       setError(err.response?.data?.message || "Invalid code")
@@ -172,6 +185,7 @@ export default function BackOfficeLogin() {
                 autoFocus
               />
             </div>
+            <RememberDeviceCheckbox value={rememberDevice} onChange={rememberPref} />
             <button
               type="submit"
               disabled={busy || code.length !== 6}
@@ -198,6 +212,7 @@ export default function BackOfficeLogin() {
                 autoFocus
               />
             </div>
+            <RememberDeviceCheckbox value={rememberDevice} onChange={rememberPref} />
             <button
               type="submit"
               disabled={busy || code.length !== 6}
@@ -209,5 +224,23 @@ export default function BackOfficeLogin() {
         )}
       </div>
     </div>
+  )
+}
+
+// Sticky checkbox shown on both 2FA stages. When checked, the backend issues
+// a 30-day bo_device cookie so 2FA is skipped on this browser next time.
+// Preference is persisted in localStorage so the checkbox starts in the
+// state the user last picked.
+function RememberDeviceCheckbox({ value, onChange }) {
+  return (
+    <label className="flex items-start gap-2 text-xs text-gray-600 cursor-pointer select-none">
+      <input
+        type="checkbox"
+        checked={value}
+        onChange={(e) => onChange(e.target.checked)}
+        className="mt-0.5 w-3.5 h-3.5 rounded accent-orange-500"
+      />
+      <span>Trust this browser for 30 days (skip 2FA on next sign-in)</span>
+    </label>
   )
 }

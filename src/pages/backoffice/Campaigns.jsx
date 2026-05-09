@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import axios from "../../axiosConfig"
 import { boCampaignsURL } from "../../routes/Url"
+import { useConfirm } from "../../components/ConfirmDialog"
 
 const TYPE_LABEL = {
   discount_pct: "% off",
@@ -154,13 +155,17 @@ function CreateCampaignModal({ onClose, onCreated }) {
 
 function CampaignDeepDive({ data, onClose, onChange, canEdit }) {
   const c = data.campaign
+  const { confirm } = useConfirm()
   const exportUrl = `${boCampaignsURL}/${c._id}/export.csv`
   const setStatus = async (status) => {
     await axios.patch(`${boCampaignsURL}/${c._id}`, { status })
     onChange()
   }
   const remove = async () => {
-    if (!confirm(`Delete "${c.name}" and all ${data.codes.length}+ codes?`)) return
+    if (!(await confirm(`This deletes the campaign and all ${data.codes.length}+ generated codes. Existing redemptions stay attached to those customers, but the codes themselves are gone.`, {
+      title: `Delete "${c.name}"?`,
+      confirmLabel: "Delete campaign",
+    }))) return
     await axios.delete(`${boCampaignsURL}/${c._id}`)
     onClose()
     onChange()

@@ -1,5 +1,7 @@
 import axios from "../../../axiosConfig"
 import { boCustomersURL } from "../../../routes/Url"
+import { useConfirm } from "../../../components/ConfirmDialog"
+import toast from "../../../utils/toast"
 
 const STATUS_DOT = (status, lastSeen) => {
   const minutesAgo = lastSeen ? (Date.now() - new Date(lastSeen).getTime()) / 60_000 : Infinity
@@ -8,14 +10,25 @@ const STATUS_DOT = (status, lastSeen) => {
   return "bg-red-500"
 }
 
+const ACTION_LABEL = {
+  restart: { title: "Restart gateway?", body: "Sends a restart command over MQTT. The gateway will go offline briefly while it reboots.", confirmLabel: "Restart" },
+  resync:  { title: "Resync gateway config?", body: "Pushes the latest config to the gateway over MQTT. Existing readings continue uninterrupted.", confirmLabel: "Resync" },
+  unassign:{ title: "Unassign gateway from customer?", body: "Hardware stays in inventory; previous owner has a 24-hour re-claim window before anyone else can pair it.", confirmLabel: "Unassign" },
+}
+
 export default function TabHardware({ data, customerId, role, onChange }) {
   const canAct = ["admin", "support"].includes(role)
+  const { confirm } = useConfirm()
   const action = async (gwId, act) => {
-    if (!confirm(`${act} this gateway?`)) return
+    const meta = ACTION_LABEL[act] || { title: `${act} this gateway?`, body: "", confirmLabel: act }
+    if (!(await confirm(meta.body, { title: meta.title, confirmLabel: meta.confirmLabel }))) return
     try {
       await axios.post(`${boCustomersURL}/${customerId}/gateways/${gwId}`, { action: act })
+      toast.success(`Gateway ${act} sent.`)
       onChange()
-    } catch (e) { alert(e.response?.data?.message || "Failed") }
+    } catch (e) {
+      toast.error(e.response?.data?.message || "Failed")
+    }
   }
 
   return (
@@ -51,28 +64,51 @@ export default function TabHardware({ data, customerId, role, onChange }) {
       </Card>
 
       <Card title={`Sensors (${data.sensors.length})`}>
-        <table className="w-full text-sm">
-          <thead className="text-xs uppercase text-gray-400">
-            <tr>
-              <th className="text-left py-1.5">MAC</th><th className="text-left">Appliance</th>
-              <th className="text-left">Status</th><th className="text-left">Battery</th>
-              <th className="text-left">RSSI</th><th className="text-left">Last seen</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.sensors.map(s => (
-              <tr key={s._id} className="border-t border-gray-50">
-                <td className="py-2 font-mono text-xs">{s.mac}</td>
-                <td className="py-2 text-gray-500 text-xs">{s.appliance_id ? String(s.appliance_id).slice(-6) : "—"}</td>
-                <td className="py-2"><span className={`inline-block w-2 h-2 rounded-full mr-1.5 ${STATUS_DOT(s.status, s.last_seen)}`} />{s.status}</td>
-                <td className="py-2 text-xs">{s.battery_level != null ? `${s.battery_level}%` : "—"}</td>
-                <td className="py-2 text-xs">{s.signal_strength != null ? `${s.signal_strength} dBm` : "—"}</td>
-                <td className="py-2 text-gray-500 text-xs">{s.last_seen ? new Date(s.last_seen).toLocaleString() : "Never"}</td>
-              </tr>
-            ))}
-            {data.sensors.length === 0 && <tr><td colSpan="6" className="py-6 text-center text-gray-400 text-sm">No sensors.</td></tr>}
-          </tbody>
-        </table>
+        {(() => {
+          // Build lookup maps so the sensors table can show the human-readable
+          // appliance name and gateway MAC instead of opaque ObjectIds.
+          const applianceById = new Map(data.appliances.map(a => [String(a._id), a]))
+          const gatewayById = new Map(data.gateways.map(g => [String(g._id), g]))
+          return (
+            <table className="w-full text-sm">
+              <thead className="text-xs uppercase text-gray-400">
+                <tr>
+                  <th className="text-left py-1.5">MAC</th>
+                  <th className="text-left">Appliance</th>
+                  <th className="text-left">Gateway</th>
+                  <th className="text-left">Status</th>
+                  <th className="text-left">Battery</th>
+                  <th className="text-left">RSSI</th>
+                  <th className="text-left">Last seen</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.sensors.map(s => {
+                  const appliance = s.appliance_id ? applianceById.get(String(s.appliance_id)) : null
+                  const gateway = s.gateway_id ? gatewayById.get(String(s.gateway_id)) : null
+                  return (
+                    <tr key={s._id} className="border-t border-gray-50">
+                      <td className="py-2 font-mono text-xs">{s.mac}</td>
+                      <td className="py-2 text-xs">
+                        {appliance
+                          ? <span className="text-gray-900">{appliance.name} <span className="text-gray-400">({appliance.type})</span></span>
+                          : <span className="text-gray-400 italic">unassigned</span>}
+                      </td>
+                      <td className="py-2 font-mono text-xs">
+                        {gateway ? gateway.mac : <span className="text-gray-400 italic font-sans">—</span>}
+                      </td>
+                      <td className="py-2"><span className={`inline-block w-2 h-2 rounded-full mr-1.5 ${STATUS_DOT(s.status, s.last_seen)}`} />{s.status}</td>
+                      <td className="py-2 text-xs">{s.battery_level != null ? `${s.battery_level}%` : "—"}</td>
+                      <td className="py-2 text-xs">{s.signal_strength != null ? `${s.signal_strength} dBm` : "—"}</td>
+                      <td className="py-2 text-gray-500 text-xs">{s.last_seen ? new Date(s.last_seen).toLocaleString() : "Never"}</td>
+                    </tr>
+                  )
+                })}
+                {data.sensors.length === 0 && <tr><td colSpan="7" className="py-6 text-center text-gray-400 text-sm">No sensors.</td></tr>}
+              </tbody>
+            </table>
+          )
+        })()}
       </Card>
 
       <Card title={`Appliances (${data.appliances.length})`}>

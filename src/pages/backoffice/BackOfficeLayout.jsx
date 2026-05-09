@@ -10,6 +10,7 @@ import {
   FiZap,
   FiClipboard,
   FiUser,
+  FiUserPlus,
 } from "react-icons/fi"
 import axios from "../../axiosConfig"
 import { boLogoutURL, boMeURL } from "../../routes/Url"
@@ -20,6 +21,7 @@ import CustomerSupport from "./CustomerSupport"
 import Analytics from "./Analytics"
 import Campaigns from "./Campaigns"
 import Profile from "./Profile"
+import BackOfficeUsers from "./BackOfficeUsers"
 import { boPath } from "./boPath"
 
 // Role -> visible nav entries. Enforced server-side too — UI is just hint.
@@ -32,6 +34,7 @@ const NAV = [
   { to: boPath("/campaigns"), label: "Campaigns", icon: FiTag, roles: ["admin", "readonly"] },
   { to: boPath("/system-health"), label: "System Health", icon: FiShield, roles: ["admin"] },
   { to: boPath("/audit-log"), label: "Audit Log", icon: FiClipboard, roles: ["admin", "readonly"] },
+  { to: boPath("/users"), label: "Users", icon: FiUserPlus, roles: ["admin", "support", "readonly"] },
   { to: boPath("/profile"), label: "Profile", icon: FiUser, roles: ["admin", "support", "readonly"] },
 ]
 
@@ -114,6 +117,7 @@ export default function BackOfficeLayout() {
           <Route path="campaigns" element={<Campaigns user={user} />} />
           <Route path="system-health" element={<SystemHealth user={user} />} />
           <Route path="audit-log" element={<AuditLogPage user={user} />} />
+          <Route path="users" element={<BackOfficeUsers user={user} />} />
           <Route path="profile" element={<Profile user={user} />} />
           <Route path="*" element={<Navigate to="dashboard" replace />} />
         </Routes>

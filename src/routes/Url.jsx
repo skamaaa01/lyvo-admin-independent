@@ -13,6 +13,7 @@ const boLogoutURL          = backOfficeURL + "/auth/logout"
 const boMeURL              = backOfficeURL + "/auth/me"
 const boChangePasswordURL  = backOfficeURL + "/auth/change-password"
 const boReset2FAURL        = backOfficeURL + "/auth/reset-2fa"
+const boUsersURL           = backOfficeURL + "/bo-users"
 const boSystemHealthURL    = backOfficeURL + "/system/health"
 const boAuditLogURL        = backOfficeURL + "/audit-log"
 const boCustomersURL       = backOfficeURL + "/customers"
@@ -29,6 +30,7 @@ export {
   boMeURL,
   boChangePasswordURL,
   boReset2FAURL,
+  boUsersURL,
   boSystemHealthURL,
   boAuditLogURL,
   boCustomersURL,
