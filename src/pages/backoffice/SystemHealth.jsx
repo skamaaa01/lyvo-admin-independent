@@ -186,6 +186,21 @@ export default function SystemHealth() {
       <Section title="External services">
         <Row label="Stripe API key" value={data.external.stripeConfigured ? "Configured" : "Missing"} status={data.external.stripeConfigured ? "ok" : "warn"} />
         <Row
+          label="Stripe webhook"
+          value={
+            !data.external.stripeWebhook?.lastReceivedAt
+              ? "No events received yet"
+              : `Last event: ${new Date(data.external.stripeWebhook.lastReceivedAt).toLocaleString()} · ${data.external.stripeWebhook.totalSuccess}✓ / ${data.external.stripeWebhook.totalFailed}✗`
+          }
+          status={
+            data.external.stripeWebhook?.healthy === false ? "warn"
+              : data.external.stripeWebhook?.lastError ? "warn"
+              : data.external.stripeWebhook?.lastReceivedAt ? "ok"
+              : "warn"
+          }
+          extra={data.external.stripeWebhook?.lastError ? <span className="text-xs text-red-600 ml-2 truncate" title={data.external.stripeWebhook.lastError}>· {data.external.stripeWebhook.lastError.slice(0, 60)}</span> : null}
+        />
+        <Row
           label="MQTT broker"
           value={
             !data.external.mqtt?.configured

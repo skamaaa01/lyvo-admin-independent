@@ -14,11 +14,23 @@ export default function ActionsMenu({ customer, role, onChange }) {
     setBusy(action)
     try {
       const { data } = await axios.post(`${boCustomersURL}/${customer._id}/actions/${action}`, body)
-      if (data?.url) {
-        // Shadow login returns a URL the agent should open in a new tab.
-        // Use a custom dialog so popup blockers don't swallow window.open(),
-        // and so the agent has time to copy the URL if they prefer.
-        window.open(data.url, "_blank")
+      if (action === "shadow-login" && data?.sessionId) {
+        // Build the redirect URL on the frontend using VITE_APP_BASE_URL —
+        // the customer-app origin is a frontend deploy concern, not
+        // something the backend should know about. Falls back to the
+        // current window's origin in dev so a fresh checkout "just works"
+        // (assuming admin-frontend on :3100 and customer-app on :3000 share
+        // localhost). For production set VITE_APP_BASE_URL=https://lyvo.app
+        // in admin-frontend/.env before building.
+        const customerAppOrigin = (
+          import.meta.env.VITE_APP_BASE_URL ||
+          // Best-effort dev fallback: same hostname on the customer-app port
+          (typeof window !== "undefined"
+            ? `${window.location.protocol}//${window.location.hostname}:3000`
+            : "")
+        ).replace(/\/+$/, "")
+        const url = `${customerAppOrigin}/?shadow_session=${data.sessionId}`
+        window.open(url, "_blank")
         toast.success("Shadow session opened — check the new tab")
       } else if (data?.resetLinkPreview) {
         // Show the reset link in a copyable read-only prompt. The link is
@@ -50,12 +62,29 @@ export default function ActionsMenu({ customer, role, onChange }) {
     { key: "pause-subscription", label: "Pause 30d", roles: ["admin", "support"], body: { days: 30 } },
     { key: "reactivate-subscription", label: "Reactivate", roles: ["admin", "support"] },
     { key: "cancel-subscription", label: "Cancel subscription", roles: ["admin", "support"], danger: true, promptText: "Why is this customer cancelling?" },
+    { key: "apply-credit", label: "Apply credit (£)", roles: ["admin"], isCreditPrompt: true },
     { key: customer.suspended ? "unsuspend" : "suspend", label: customer.suspended ? "Unsuspend account" : "Suspend account", roles: ["admin"], danger: !customer.suspended, promptText: customer.suspended ? null : "Reason for suspension?" },
   ].filter(a => a.roles.includes(role))
 
   const trigger = async (a) => {
     let body = a.body || {}
-    if (a.promptText) {
+    if (a.isCreditPrompt) {
+      // Two prompts: amount, then reason. Amount is in £ (we convert to pence
+      // server-side). Positive number = credit applied to customer's account.
+      const amountStr = await ask("Amount in £ (positive credits the customer, negative charges them):", {
+        title: "Apply credit",
+        placeholder: "e.g. 25.00",
+        validate: (v) => /^-?\d+(\.\d{1,2})?$/.test(v.trim()) && Number(v) !== 0,
+      })
+      if (amountStr == null) return
+      const reason = await ask("Reason (visible in the audit log):", {
+        title: "Apply credit",
+        multiline: true,
+        validate: (v) => v.trim().length > 0,
+      })
+      if (reason == null) return
+      body = { amountPence: Math.round(parseFloat(amountStr) * 100), reason }
+    } else if (a.promptText) {
       const reason = await ask(a.promptText, {
         title: a.label,
         confirmLabel: a.label,
