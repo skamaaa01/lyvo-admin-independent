@@ -4,6 +4,36 @@ import { boCustomersURL } from "../../../routes/Url"
 import { useConfirm } from "../../../components/ConfirmDialog"
 import toast from "../../../utils/toast"
 
+// Resolve the customer-app origin for shadow-login redirects. Priority:
+//   1. VITE_APP_BASE_URL — explicit env override, ideal for prod builds
+//   2. Strip `admin.` prefix from current hostname — works for
+//      admin.lyvo.app → lyvo.app, admin.staging.lyvo.app → staging.lyvo.app,
+//      etc. without any env var. NEVER appends a port, so prod URLs stay
+//      clean (the previous version appended `:3000` literally, which broke
+//      production when admin-frontend was deployed without VITE_APP_BASE_URL).
+//   3. localhost:3000 — dev convention when running on bare localhost.
+function resolveCustomerAppOrigin() {
+  const envOverride = (import.meta.env.VITE_APP_BASE_URL || "").trim()
+  if (envOverride) return envOverride.replace(/\/+$/, "")
+
+  if (typeof window === "undefined") return ""
+
+  const { protocol, hostname, port } = window.location
+  // admin.lyvo.app → lyvo.app, admin.foo.bar → foo.bar
+  if (hostname.startsWith("admin.")) {
+    return `${protocol}//${hostname.slice("admin.".length)}`
+  }
+  // Bare localhost / 127.0.0.1 / 192.168.*.* — assume customer app on :3000
+  const isLocalDev = /^(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+)$/.test(hostname)
+  if (isLocalDev) {
+    return `${protocol}//${hostname}:3000`
+  }
+  // Last resort — same origin (rare: an agent running admin app on the
+  // exact same hostname as the customer app, e.g. behind a path-prefix
+  // reverse proxy). Strip any port; we have no good way to infer it.
+  return `${protocol}//${hostname}${port && (port === "80" || port === "443") ? "" : (port ? ":" + port : "")}`
+}
+
 export default function ActionsMenu({ customer, role, onChange }) {
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState("")
@@ -15,21 +45,7 @@ export default function ActionsMenu({ customer, role, onChange }) {
     try {
       const { data } = await axios.post(`${boCustomersURL}/${customer._id}/actions/${action}`, body)
       if (action === "shadow-login" && data?.sessionId) {
-        // Build the redirect URL on the frontend using VITE_APP_BASE_URL —
-        // the customer-app origin is a frontend deploy concern, not
-        // something the backend should know about. Falls back to the
-        // current window's origin in dev so a fresh checkout "just works"
-        // (assuming admin-frontend on :3100 and customer-app on :3000 share
-        // localhost). For production set VITE_APP_BASE_URL=https://lyvo.app
-        // in admin-frontend/.env before building.
-        const customerAppOrigin = (
-          import.meta.env.VITE_APP_BASE_URL ||
-          // Best-effort dev fallback: same hostname on the customer-app port
-          (typeof window !== "undefined"
-            ? `${window.location.protocol}//${window.location.hostname}:3000`
-            : "")
-        ).replace(/\/+$/, "")
-        const url = `${customerAppOrigin}/?shadow_session=${data.sessionId}`
+        const url = `${resolveCustomerAppOrigin()}/?shadow_session=${data.sessionId}`
         window.open(url, "_blank")
         toast.success("Shadow session opened — check the new tab")
       } else if (data?.resetLinkPreview) {
