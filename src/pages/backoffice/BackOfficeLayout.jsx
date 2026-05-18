@@ -11,6 +11,8 @@ import {
   FiClipboard,
   FiUser,
   FiUserPlus,
+  FiHelpCircle,
+  FiDollarSign,
 } from "react-icons/fi"
 import axios from "../../axiosConfig"
 import { boLogoutURL, boMeURL } from "../../routes/Url"
@@ -22,6 +24,9 @@ import Analytics from "./Analytics"
 import Campaigns from "./Campaigns"
 import Profile from "./Profile"
 import BackOfficeUsers from "./BackOfficeUsers"
+import Tickets from "./Tickets"
+import TicketDetail from "./TicketDetail"
+import Plans from "./Plans"
 import { boPath } from "./boPath"
 
 // Role -> visible nav entries. Enforced server-side too — UI is just hint.
@@ -30,8 +35,10 @@ import { boPath } from "./boPath"
 const NAV = [
   { to: boPath("/dashboard"), label: "Dashboard", icon: FiGrid, roles: ["admin", "support", "readonly"] },
   { to: boPath("/customers"), label: "Customer Support", icon: FiUsers, roles: ["admin", "support", "readonly"] },
+  { to: boPath("/tickets"), label: "Tickets", icon: FiHelpCircle, roles: ["admin", "support", "readonly"] },
   { to: boPath("/analytics"), label: "Analytics", icon: FiActivity, roles: ["admin", "readonly"] },
   { to: boPath("/campaigns"), label: "Campaigns", icon: FiTag, roles: ["admin", "readonly"] },
+  { to: boPath("/plans"), label: "Plans & Pricing", icon: FiDollarSign, roles: ["admin", "readonly"] },
   { to: boPath("/system-health"), label: "System Health", icon: FiShield, roles: ["admin"] },
   { to: boPath("/audit-log"), label: "Audit Log", icon: FiClipboard, roles: ["admin", "readonly"] },
   { to: boPath("/users"), label: "Users", icon: FiUserPlus, roles: ["admin", "support", "readonly"] },
@@ -115,9 +122,12 @@ export default function BackOfficeLayout() {
           <Route path="customers/*" element={<CustomerSupport user={user} />} />
           <Route path="analytics" element={<Analytics user={user} />} />
           <Route path="campaigns" element={<Campaigns user={user} />} />
+          <Route path="plans" element={<Plans user={user} />} />
           <Route path="system-health" element={<SystemHealth user={user} />} />
           <Route path="audit-log" element={<AuditLogPage user={user} />} />
           <Route path="users" element={<BackOfficeUsers user={user} />} />
+          <Route path="tickets" element={<Tickets user={user} />} />
+          <Route path="tickets/:id" element={<TicketDetail user={user} />} />
           <Route path="profile" element={<Profile user={user} />} />
           <Route path="*" element={<Navigate to="dashboard" replace />} />
         </Routes>

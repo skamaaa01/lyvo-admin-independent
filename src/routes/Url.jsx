@@ -19,6 +19,9 @@ const boAuditLogURL        = backOfficeURL + "/audit-log"
 const boCustomersURL       = backOfficeURL + "/customers"
 const boCampaignsURL       = backOfficeURL + "/campaigns"
 const boAnalyticsURL       = backOfficeURL + "/analytics"
+const boTicketsURL         = backOfficeURL + "/tickets"
+const boTicketsDashboardURL = backOfficeURL + "/tickets/dashboard"
+const boPlansURL           = backOfficeURL + "/plans"
 
 export {
   backOfficeURL,
@@ -36,4 +39,7 @@ export {
   boCustomersURL,
   boCampaignsURL,
   boAnalyticsURL,
+  boTicketsURL,
+  boTicketsDashboardURL,
+  boPlansURL,
 }
