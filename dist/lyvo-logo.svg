@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 160" role="img" aria-label="LYVO">
+  <!-- Icon mark: two interlocking rounded squares -->
+  <g>
+    <!-- Back square (top-left), lighter orange -->
+    <rect x="10" y="10" width="90" height="90" rx="16" fill="#FB923C"/>
+    <!-- Front square (bottom-right), main orange -->
+    <rect x="55" y="55" width="90" height="90" rx="16" fill="#F97316"/>
+  </g>
+  <!-- Wordmark "LYVO" -->
+  <text x="180" y="110" font-family="'Segoe UI', Arial, sans-serif" font-weight="900" font-size="92" fill="#0B1426" letter-spacing="2">LYVO</text>
+  <!-- Orange brand dot after the O -->
+  <circle cx="488" cy="110" r="7" fill="#F97316"/>
+</svg>
