@@ -13,22 +13,41 @@
  * the plan-gate resolves a tenant's tier from this name. The page warns if
  * a name strays from those so pricing edits can't silently break gating.
  */
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import axios from "../../axiosConfig"
-import { boPlansURL } from "../../routes/Url"
+import { boPlansURL, boPlansCatalogURL } from "../../routes/Url"
 import { useConfirm } from "../../components/ConfirmDialog"
 
 const KNOWN_TIERS = ["compliance", "control", "scale"]
+// `features` is the WHITELIST of feature flags enabled for this plan;
+// `history_days` is the per-plan retention cap (null = inherit from the
+// code-map default for the plan's tier). Backend route-gate reads both
+// from this row with a per-field fallback to config/planCapabilities.js.
 const EMPTY = {
   name: "", description: "", price: 0, billingCycle: "monthly",
   features: [], limits: { shops: 1, users: 0, managers: 0 },
+  history_days: null,
   isActive: true, isFree: false, trialDays: 30, color: "#6366f1",
   isPopular: false, stripePriceIdTest: "", stripePriceIdLive: "",
 }
 
+// Visual grouping for the feature checklist — purely a UI hint based on
+// the code-map default tier; the operator can grant any combination per
+// plan regardless of group.
+const GROUP_META = {
+  compliance: { label: "Compliance baseline (every tier by default)", dot: "bg-slate-400" },
+  control:    { label: "Control & up",                                  dot: "bg-orange-400" },
+  scale:      { label: "Scale-only",                                    dot: "bg-violet-400" },
+}
+
 export default function Plans({ user }) {
   const canEdit = user?.role === "admin"
-  const confirm = useConfirm()
+  // useConfirm() returns { confirm, prompt } — destructure to get the
+  // function. (Previously this was `const confirm = useConfirm()` which
+  // made `confirm` the whole context object and would throw "confirm is
+  // not a function" on the delete button too — latent bug, surfaced when
+  // we added the empty-features confirm to the save flow.)
+  const { confirm } = useConfirm()
 
   const [items, setItems]   = useState([])
   const [loading, setLoading] = useState(true)
@@ -36,6 +55,8 @@ export default function Plans({ user }) {
   const [form, setForm]     = useState(EMPTY)
   const [saving, setSaving] = useState(false)
   const [err, setErr]       = useState(null)
+  // Feature catalogue from /api/admin/plans/feature-catalog — { features: [{key,label,group,defaultTiers}], limits, hints }
+  const [catalog, setCatalog] = useState(null)
 
   const reload = () =>
     axios.get(boPlansURL, { _silentToast: true })
@@ -43,6 +64,22 @@ export default function Plans({ user }) {
       .catch(() => setLoading(false))
 
   useEffect(() => { reload() }, [])
+  // Catalogue is static between deploys; fetch once and reuse for every
+  // open of the editor. Failure leaves the checklist hidden with a hint,
+  // not a hard error — the rest of the form still works.
+  useEffect(() => {
+    axios.get(boPlansCatalogURL, { _silentToast: true })
+      .then(({ data }) => setCatalog(data))
+      .catch(() => { /* non-fatal */ })
+  }, [])
+
+  // Pre-group features for the checklist so we can render Compliance /
+  // Control / Scale sections without re-computing on every keystroke.
+  const grouped = useMemo(() => {
+    const out = { compliance: [], control: [], scale: [] }
+    for (const f of (catalog?.features || [])) (out[f.group] || out.compliance).push(f)
+    return out
+  }, [catalog])
 
   const openNew  = () => { setForm(EMPTY); setEditing("new"); setErr(null) }
   const openEdit = (p) => {
@@ -50,6 +87,7 @@ export default function Plans({ user }) {
       ...EMPTY, ...p,
       features: Array.isArray(p.features) ? p.features : [],
       limits: { shops: p.limits?.shops ?? 1, users: p.limits?.users ?? 0, managers: p.limits?.managers ?? 0 },
+      history_days: p.history_days ?? null,
     })
     setEditing(p)
     setErr(null)
@@ -58,11 +96,28 @@ export default function Plans({ user }) {
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
   const setLimit = (k, v) => setForm(f => ({ ...f, limits: { ...f.limits, [k]: v === "" ? "" : Number(v) } }))
+  const toggleFeature = (key) => setForm(f => {
+    const has = f.features.includes(key)
+    return { ...f, features: has ? f.features.filter(x => x !== key) : [...f.features, key] }
+  })
 
   const save = async () => {
     setErr(null)
     if (!form.name.trim()) return setErr("Name is required")
     if (form.price === "" || isNaN(Number(form.price))) return setErr("Price must be a number in pence (e.g. 2900 = £29.00)")
+
+    // Empty features list now means STRICT zero (operator intent) — the
+    // gate no longer silently inherits code-map defaults. Guard against
+    // an accidental "unticked everything" save that would lock every
+    // customer on this plan out of every module.
+    if (Array.isArray(form.features) && form.features.length === 0) {
+      const goAhead = await confirm(
+        `You're about to save the "${form.name || "this"}" plan with ZERO features ticked. Every customer on this plan will lose access to ALL modules until features are added back. Continue?`,
+        { title: "Save plan with no features?", confirmLabel: "Yes — save empty" },
+      )
+      if (!goAhead) return
+    }
+
     setSaving(true)
     try {
       const payload = {
@@ -74,6 +129,11 @@ export default function Plans({ user }) {
           users: Number(form.limits.users),
           managers: Number(form.limits.managers),
         },
+        // Blank string → null so the backend stores "inherit from code map"
+        // rather than NaN. Numbers (incl. -1 = unlimited) pass through.
+        history_days: form.history_days === null || form.history_days === ""
+          ? null : Number(form.history_days),
+        features: Array.isArray(form.features) ? form.features : [],
       }
       if (editing === "new") await axios.post(boPlansURL, payload, { _silentToast: true })
       else                   await axios.patch(`${boPlansURL}/${editing._id}`, payload, { _silentToast: true })
@@ -186,11 +246,82 @@ export default function Plans({ user }) {
               ))}
             </div>
 
-            <Field label="Trial days">
-              <input className={inputCls} type="number" min="0" value={form.trialDays} onChange={e => set("trialDays", e.target.value)} />
-            </Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Trial days">
+                <input className={inputCls} type="number" min="0" value={form.trialDays} onChange={e => set("trialDays", e.target.value)} />
+              </Field>
+              <Field label="History retention (days) — blank = inherit, -1 = unlimited">
+                <input
+                  className={inputCls}
+                  type="number"
+                  min="-1"
+                  value={form.history_days ?? ""}
+                  onChange={e => set("history_days", e.target.value === "" ? null : Number(e.target.value))}
+                  placeholder="inherit"
+                />
+              </Field>
+            </div>
 
-            {/* The whole reason this page exists */}
+            {/* ── Feature checklist (DB-driven entitlements) ──────────
+                Every feature flag enforceable on the route gate is listed
+                here. Operator picks which ones THIS plan grants. If the
+                list is empty the backend falls back to the code-map
+                defaults for the plan's tier (safety floor — clearing the
+                list will NOT lock customers out). */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-bold text-gray-700">Plan features</p>
+                <span className="text-[11px] text-gray-400">
+                  {form.features.length === 0
+                    ? "empty — inheriting code-map defaults"
+                    : `${form.features.length} selected`}
+                </span>
+              </div>
+
+              {!catalog && (
+                <p className="text-xs text-gray-400 py-3">Loading feature catalogue…</p>
+              )}
+
+              {catalog && ["compliance", "control", "scale"].map(group => {
+                if (!grouped[group]?.length) return null
+                const m = GROUP_META[group]
+                const onCount = grouped[group].filter(f => form.features.includes(f.key)).length
+                return (
+                  <div key={group} className="mb-3 border border-gray-100 rounded-xl overflow-hidden">
+                    <div className="px-3 py-2 flex items-center gap-2 bg-gray-50 border-b border-gray-100">
+                      <span className={`inline-block w-2 h-2 rounded-full ${m.dot}`} />
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-gray-600">{m.label}</span>
+                      <span className="text-[10px] text-gray-400 ml-auto">{onCount} / {grouped[group].length}</span>
+                    </div>
+                    <div className="grid sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-gray-100">
+                      {grouped[group].map(f => {
+                        const checked = form.features.includes(f.key)
+                        return (
+                          <label key={f.key} className="flex items-start gap-2 px-3 py-2 cursor-pointer hover:bg-gray-50 transition-colors">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => toggleFeature(f.key)}
+                              className="mt-0.5 h-4 w-4 accent-orange-500"
+                            />
+                            <div className="min-w-0">
+                              <p className="text-sm text-gray-800 leading-tight">{f.label}</p>
+                              <p className="text-[10px] text-gray-400 font-mono mt-0.5 truncate">{f.key}</p>
+                            </div>
+                          </label>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              })}
+
+              <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-2">
+                <strong>Strict semantics:</strong> an empty list means <strong>zero features</strong> — every customer on this plan loses access to every module. Only the legacy case of a Plan row whose <code>features</code> field was never set falls back to code-map defaults. The editor will ask you to confirm before saving an empty list. Edits take effect on the very next request.
+              </p>
+            </div>
+
+            {/* The whole reason this page originally existed */}
             <div className="border border-orange-200 bg-orange-50/50 rounded-xl p-3 space-y-3">
               <p className="text-xs font-bold text-orange-700">Stripe price IDs</p>
               <Field label="Test mode price ID (STRIPE_MODE=test)">

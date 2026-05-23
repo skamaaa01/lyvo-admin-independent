@@ -22,6 +22,7 @@ const boAnalyticsURL       = backOfficeURL + "/analytics"
 const boTicketsURL         = backOfficeURL + "/tickets"
 const boTicketsDashboardURL = backOfficeURL + "/tickets/dashboard"
 const boPlansURL           = backOfficeURL + "/plans"
+const boPlansCatalogURL    = backOfficeURL + "/plans/feature-catalog"
 
 export {
   backOfficeURL,
@@ -42,4 +43,5 @@ export {
   boTicketsURL,
   boTicketsDashboardURL,
   boPlansURL,
+  boPlansCatalogURL,
 }
