@@ -69,7 +69,7 @@ export default function CustomerDetail({ user }) {
 
       <div className="px-8 pt-6 pb-12">
         {tab === "account" && <TabAccount data={data.account} customerId={id} role={user.role} onChange={reload} notes={data.notes} />}
-        {tab === "billing" && <TabBilling data={data.billing} />}
+        {tab === "billing" && <TabBilling data={data.billing} customerId={id} role={user.role} onChange={reload} />}
         {tab === "hardware" && <TabHardware data={data.hardware} customerId={id} role={user.role} onChange={reload} />}
         {tab === "activity" && <TabActivity data={data.activity} />}
         {tab === "compliance" && <TabCompliance data={data.compliance} />}

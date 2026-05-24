@@ -1,5 +1,16 @@
-export default function TabBilling({ data }) {
-  if (!data) return <div className="text-sm text-gray-400">No subscription record on file.</div>
+import PlanChangePanel from "./PlanChangePanel"
+
+export default function TabBilling({ data, customerId, role, onChange }) {
+  if (!data) {
+    // No subscription record means we can't reliably mutate anything, but
+    // operators should still see why — they may need to create one manually
+    // (rare). Showing a friendlier message than the silent dash.
+    return (
+      <div className="space-y-4">
+        <div className="text-sm text-gray-400">No subscription record on file.</div>
+      </div>
+    )
+  }
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       <div className="bg-white rounded-xl border border-gray-100 p-5">
@@ -28,6 +39,7 @@ export default function TabBilling({ data }) {
           <p className="text-xs text-gray-400">No Stripe link — customer is on a non-paid plan or hasn't checked out yet.</p>
         )}
       </div>
+      <PlanChangePanel customerId={customerId} role={role} billing={data} onChange={onChange} />
     </div>
   )
 }
