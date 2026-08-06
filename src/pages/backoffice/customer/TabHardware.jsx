@@ -16,9 +16,34 @@ const ACTION_LABEL = {
   unassign:{ title: "Unassign gateway from customer?", body: "Hardware stays in inventory; previous owner has a 24-hour re-claim window before anyone else can pair it.", confirmLabel: "Unassign" },
 }
 
+// Copy for the device-registration reset. Deliberately spells out the two
+// caveats — the counter is keyed by source IP (the API doesn't trust
+// X-Forwarded-For, so behind the proxy everyone shares one bucket) and the
+// counter lives in memory per API process.
+const RESET_ATTEMPTS = {
+  title: "Reset device registration attempts?",
+  body: "Clears the pairing rate limiter so the customer can register a device again straight away, instead of waiting out the 15-minute window. Affects the device pairing endpoints only — logins, PINs and signups keep their brute-force protection. The limit is counted per source IP and per API process, so this may also clear the counter for other customers behind the same connection.",
+  confirmLabel: "Reset attempts",
+}
+
 export default function TabHardware({ data, customerId, role, onChange }) {
   const canAct = ["admin", "support"].includes(role)
   const { confirm } = useConfirm()
+
+  const resetAttempts = async () => {
+    if (!(await confirm(RESET_ATTEMPTS.body, { title: RESET_ATTEMPTS.title, confirmLabel: RESET_ATTEMPTS.confirmLabel, danger: false }))) return
+    try {
+      const { data: res } = await axios.post(`${boCustomersURL}/${customerId}/actions/reset-device-attempts`)
+      toast.success(
+        res.cleared
+          ? `Cleared ${res.attempts} attempt${res.attempts === 1 ? "" : "s"} — the customer can pair a device now.`
+          : "Nothing to clear — no pairing attempts are currently blocked."
+      )
+    } catch (e) {
+      toast.error(e.response?.data?.message || "Failed")
+    }
+  }
+
   const action = async (gwId, act) => {
     const meta = ACTION_LABEL[act] || { title: `${act} this gateway?`, body: "", confirmLabel: act }
     if (!(await confirm(meta.body, { title: meta.title, confirmLabel: meta.confirmLabel }))) return
@@ -33,6 +58,23 @@ export default function TabHardware({ data, customerId, role, onChange }) {
 
   return (
     <div className="space-y-6">
+      {canAct && (
+        <Card title="Device pairing">
+          <div className="flex items-start justify-between gap-4">
+            <p className="text-sm text-gray-500 leading-relaxed">
+              If the customer sees <span className="font-medium text-gray-700">“Too many device registration attempts”</span> on
+              the tablet, reset the counter here instead of waiting 15 minutes.
+            </p>
+            <button
+              onClick={resetAttempts}
+              className="flex-shrink-0 px-3 py-1.5 rounded-lg border border-gray-200 text-sm hover:bg-gray-50"
+            >
+              Reset attempts
+            </button>
+          </div>
+        </Card>
+      )}
+
       <Card title={`Gateways (${data.gateways.length})`}>
         <table className="w-full text-sm">
           <thead className="text-xs uppercase text-gray-400">
