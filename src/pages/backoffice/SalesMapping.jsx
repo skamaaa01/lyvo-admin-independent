@@ -949,7 +949,7 @@ function CustomerPicker({ value, onChange, disabled, placeholder = "Search custo
           onChange={(e) => { setQ(e.target.value); setOpen(true) }}
           onFocus={() => setOpen(true)}
           placeholder={placeholder}
-          className={`${inputCls} pl-8`}
+          className={`${inputCls} !pl-8`}
         />
       </div>
       {open && (
@@ -2786,7 +2786,7 @@ export default function SalesMapping({ user }) {
             </select>
             <div className="relative flex-1 min-w-[180px]">
               <FiSearch size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input value={filters.search} onChange={(e) => setFilter("search", e.target.value)} placeholder="Search profile name…" className={`${inputCls} pl-8`} />
+              <input value={filters.search} onChange={(e) => setFilter("search", e.target.value)} placeholder="Search profile name…" className={`${inputCls} !pl-8`} />
             </div>
           </div>
 
