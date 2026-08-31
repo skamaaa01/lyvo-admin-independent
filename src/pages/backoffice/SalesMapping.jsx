@@ -79,7 +79,7 @@ const STATUSES = ["draft", "tested", "active", "disabled"]
 // The server's /csv/preview response carries `canonical_fields` + `required`; these are the fallback.
 const FIELDS_BY_TYPE = {
   menu_catalogue: ["pos_code", "item_name", "price_ex_vat", "menu_category", "vat_rate"],
-  daily_sales: ["pos_code", "item_name", "sale_date", "quantity_sold", "net_sales_total", "unit_price_ex_vat", "vat", "menu_category", "discount", "refund", "void"],
+  daily_sales: ["pos_code", "item_name", "sale_date", "quantity_sold", "net_sales_total", "unit_price_ex_vat", "vat", "menu_category", "discount", "refund", "void", "external_report_id"],
 }
 
 // Label + example transform hint per canonical field (spec §6.6.3 table).
@@ -234,7 +234,7 @@ function businessDateOffsetError(value) {
  * fails, and it is what the field/op labels below are keyed on.
  */
 const RULE_OPTIONS_FALLBACK = {
-  fields: ["pos_code", "item_name", "price_ex_vat", "menu_category", "vat_rate", "sale_date", "quantity_sold", "net_sales_total", "unit_price_ex_vat", "vat", "discount", "refund", "void", "any", "row"],
+  fields: ["pos_code", "item_name", "price_ex_vat", "menu_category", "vat_rate", "sale_date", "quantity_sold", "net_sales_total", "unit_price_ex_vat", "vat", "discount", "refund", "void", "external_report_id", "any", "row"],
   pseudo_fields: ["any", "row"],
   ops: [
     { op: "equals", kind: "text", value: "required" },
@@ -264,6 +264,7 @@ const RULE_FIELD_LABEL = {
   pos_code: "POS / SKU code", item_name: "Item name", price_ex_vat: "Price (ex VAT)", menu_category: "Category",
   vat_rate: "VAT rate", sale_date: "Sale date", quantity_sold: "Quantity", net_sales_total: "Net sales",
   unit_price_ex_vat: "Unit price (ex VAT)", vat: "VAT amount", discount: "Discount", refund: "Refund", void: "Void",
+  external_report_id: "Report / Z-number",
   any: "Any mapped cell", row: "The whole row",
 }
 const RULE_OP_LABEL = {
@@ -464,6 +465,9 @@ const REASON_TEXT = {
   no_item_name: () => "No product name on this row",
   non_numeric_qty: (p) => `Quantity is not a number — "${p.value ?? ""}"`,
   implausible_value: (p) => `Value ${p.value} is over ${p.factor}× the typical row (median ${p.median})`,
+  // A§10 — the two file-relative detectors.
+  unexpected_pos_format: (p) => `POS code "${p.value}" does not look like the others in this file (expected the shape ${p.expected})`,
+  unusual_structure: (p) => `This row fills ${p.filled} columns where the rest of the file fills ${p.expected}`,
 }
 /** @param {{reason_code?:string, reason_params?:object}} c */
 function reasonText(c) {
@@ -557,6 +561,8 @@ const ROW_REASON_TEXT = {
   missing_item_name: () => "The row has no product name.",
   non_numeric_quantity: () => "The quantity on this row is not a number.",
   implausible_value: () => "The value on this row is far outside the rest of the file.",
+  unexpected_pos_format: () => "The POS code on this row is shaped unlike the rest of the file.",
+  unusual_structure: () => "This row fills a very different number of columns from the rest of the file.",
   unusual_row: () => "The row is structurally unlike the sales rows around it.",
   no_safe_rule: () => "No rule could be written that would not risk excluding real sales.",
 }
@@ -685,7 +691,7 @@ function localRequired(importType, defaults) {
     // A single row without it still imports when it carries a POS code, hence not in `required`.
     required_to_activate: ["item_name"],
     preferred: ["item_name", "pos_code", "net_sales_total"],
-    optional: ["unit_price_ex_vat", "vat", "menu_category", "discount", "refund", "void", ...(ctx ? ["sale_date"] : [])],
+    optional: ["unit_price_ex_vat", "vat", "menu_category", "discount", "refund", "void", "external_report_id", ...(ctx ? ["sale_date"] : [])],
   }
 }
 function requirementOf(field, req) {
