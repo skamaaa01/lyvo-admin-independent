@@ -16,6 +16,7 @@ const boReset2FAURL        = backOfficeURL + "/auth/reset-2fa"
 const boUsersURL           = backOfficeURL + "/bo-users"
 const boSystemHealthURL    = backOfficeURL + "/system/health"
 const boAuditLogURL        = backOfficeURL + "/audit-log"
+const boInvoiceQueueURL    = backOfficeURL + "/invoice-queue"
 const boCustomersURL       = backOfficeURL + "/customers"
 const boCampaignsURL       = backOfficeURL + "/campaigns"
 const boAnalyticsURL       = backOfficeURL + "/analytics"
@@ -37,6 +38,7 @@ export {
   boUsersURL,
   boSystemHealthURL,
   boAuditLogURL,
+  boInvoiceQueueURL,
   boCustomersURL,
   boCampaignsURL,
   boAnalyticsURL,
